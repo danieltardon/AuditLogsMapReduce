@@ -6,16 +6,17 @@ import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Reducer;
 
-public class AuditLogsReducer extends Reducer<Text, IntWritable, Text, IntWritable> {
-
-	public void reduce(Text key, Iterable<IntWritable> values, Context context)
+public class AuditLogsReducer extends Reducer<Text, Text, Text, Text> {
+	
+	public void reduce(Text key, Iterable<Text> values, Context context)
 			throws IOException, InterruptedException {
 		// process values
-		int sum = 0;
-		for (IntWritable val : values) {
-				sum += val.get();
+		String events = "";
+		for (Text val : values) {
+			events = events + " " + val.toString();
+			
 		}
-		context.write(key, new IntWritable(sum));
+		context.write(key, new Text(events));
 		
 	}
 

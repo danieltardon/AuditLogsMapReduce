@@ -29,10 +29,15 @@ public class AuditLogs {
 		job.setJarByClass(org.redoop.audits.AuditLogs.class);
 		job.setMapperClass(org.redoop.audits.AuditLogsMapper.class);
 		job.setReducerClass(org.redoop.audits.AuditLogsReducer.class);
+		
+		// FOR TESTING 
+		// The right number of reduces seems to be 
+		// 0.95 or 1.75 * (nodes * mapred.tasktracker.reduce.tasks.maximum)
+		job.setNumReduceTasks(10);
 
 		// Specify output types
 		job.setOutputKeyClass(Text.class);
-		job.setOutputValueClass(IntWritable.class);
+		job.setOutputValueClass(Text.class);
 
 		// DELETE OUTPUT DIRECTORY FOR DEVELOPMENT
 		FileSystem fs = FileSystem.get(conf);

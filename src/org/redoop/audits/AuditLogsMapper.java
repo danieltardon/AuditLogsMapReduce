@@ -8,7 +8,7 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Mapper;
 
-public class AuditLogsMapper extends Mapper<LongWritable, Text, Text, IntWritable> {
+public class AuditLogsMapper extends Mapper<LongWritable, Text, Text, Text> {
 
 	private static final String ADD_GROUP = "ADD_GROUP";// TODO
 	private static final String ADD_USER = "ADD_USER";// TODO
@@ -40,7 +40,13 @@ public class AuditLogsMapper extends Mapper<LongWritable, Text, Text, IntWritabl
 		String fields[] = line.split(" ");
 		String type = fields[1].split("=")[1];
 		
+		for (String field : fields){
+			if(field.contains("ses=")){
+				context.write(new Text(field.split("=")[1]), new Text(type));
+			}
+		}
 		
+/*		
 		switch(type){
 		
 			case(USER_LOGIN):
@@ -66,7 +72,7 @@ public class AuditLogsMapper extends Mapper<LongWritable, Text, Text, IntWritabl
 //				map.put("res", fields[14].split("=")[1]);
 				break;
 			
-		}
+		}*/
 		
 	}
 
