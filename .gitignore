@@ -1,4 +1,13 @@
+# Directories #
+/build/
+/bin/
+
 *.class
+.classpath
+.project
+exportjar.jardesc
+
+manifest
 
 # Mobile Tools for Java (J2ME)
 .mtj.tmp/
