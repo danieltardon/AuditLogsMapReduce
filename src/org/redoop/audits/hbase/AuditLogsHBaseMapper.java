@@ -5,17 +5,16 @@ import java.io.IOException;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.io.ImmutableBytesWritable;
 import org.apache.hadoop.hbase.util.Bytes;
-import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
-import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class AuditLogsHBaseMapper extends
-		//Mapper<LongWritable, Text, ImmutableBytesWritable, Writable> {
-		Mapper<LongWritable, Text, Text,Text> {
+		Mapper<LongWritable, Text, ImmutableBytesWritable, Put> {
+	// For reducers
+	// Mapper<LongWritable, Text, Text,Text> {
 	
 	private static Logger log = LoggerFactory.getLogger(AuditLogsHBaseMapper.class);
 
@@ -45,36 +44,37 @@ public class AuditLogsHBaseMapper extends
 		
 		//PARSE ONLY SUCCESSFUL USER_LOGIN EVENTS
 		if (type.equalsIgnoreCase("USER_LOGIN") && line.contains("res=success")){
-			//Key part
+			// Key generation part
 			String node = fields[0].split("=")[1];
 			String timestamp = fields[2].substring(10).split(":")[0].substring(0, fields[0].length()-4);
 			String sKey = node + "|" + type + "|" + timestamp;			
-//			byte[] rowkey = Bytes.toBytes(sKey); 
 			
-			//Put part
-//			Put put = new Put(rowkey);
+			// Put part (For Map Only Jobs)
+			// To use reducers comment the lines below.
+			byte[] rowkey = Bytes.toBytes(sKey); 
+			Put put = new Put(rowkey);
 			
-			//Value part
+			// Value part (For Map Only Jobs). 
+			// To use reducers comment put lines.
 			String from = fields[11].split("=")[1];
-//			put.add(Bytes.toBytes(FAMILY),Bytes.toBytes(COL_FROM),Bytes.toBytes(from));
+			put.add(Bytes.toBytes(FAMILY),Bytes.toBytes(COL_FROM),Bytes.toBytes(from));
 			
 			String username = fields[15].split("=")[1];
-	//		put.add(Bytes.toBytes(FAMILY),Bytes.toBytes(COL_USERNAME),Bytes.toBytes(username));
+			put.add(Bytes.toBytes(FAMILY),Bytes.toBytes(COL_USERNAME),Bytes.toBytes(username));
 			
 			String ip = fields[12].split("=")[1];
-		//	put.add(Bytes.toBytes(FAMILY),Bytes.toBytes(COL_IP),Bytes.toBytes(ip));
+			put.add(Bytes.toBytes(FAMILY),Bytes.toBytes(COL_IP),Bytes.toBytes(ip));
 			
 			String hostname = node;
-			//put.add(Bytes.toBytes(FAMILY),Bytes.toBytes(COL_HOSTNAME),Bytes.toBytes(hostname));
+			put.add(Bytes.toBytes(FAMILY),Bytes.toBytes(COL_HOSTNAME),Bytes.toBytes(hostname));
 			
-		//	context.write(new ImmutableBytesWritable(rowkey), put);*/
+			//Write to Context (HBase)
+			context.write(null, put);
 			
-			// NEW PART TO TEST 
-			
+			/* Write to Context (Reduce)
 			String v =  from+" "+username+" "+ip+" "+hostname;
 			context.write(new Text(sKey),new Text(v));
-			
-			//END NEW PART
+			*/ 
 			
 		}
 		

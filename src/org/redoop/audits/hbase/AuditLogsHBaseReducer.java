@@ -6,7 +6,6 @@ import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.io.ImmutableBytesWritable;
 import org.apache.hadoop.hbase.mapreduce.TableReducer;
 import org.apache.hadoop.hbase.util.Bytes;
-import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,11 +23,13 @@ public class AuditLogsHBaseReducer extends
     
 	public void reduce(Text _key, Iterable<Text> values, Context context)
 			throws IOException, InterruptedException {
-		// process values
+		// Process values, unnecessary in this case because we have only one value for each key.
+		// This is just an example to show how to write to HBase in the Reducer Class. 
 		String line="";
 		for (Text val : values) {
 			line+=val.toString();
 		} 
+		
 		// Put to HBase       
         String fields[] = line.split(" ");
         
@@ -46,7 +47,6 @@ public class AuditLogsHBaseReducer extends
 		String hostname = fields[3];
 		put.add(Bytes.toBytes(FAMILY),Bytes.toBytes(COL_HOSTNAME),Bytes.toBytes(hostname));
 
-		//context.write(new ImmutableBytesWritable(Bytes.toBytes(_key.toString())), put);
 		context.write(null, put);
 		
 	}

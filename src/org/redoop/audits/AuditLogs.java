@@ -13,9 +13,7 @@ import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.io.ImmutableBytesWritable;
 import org.apache.hadoop.hbase.mapreduce.TableMapReduceUtil;
 import org.apache.hadoop.hbase.mapreduce.TableOutputFormat;
-import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
-import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.InvalidInputException;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
@@ -61,21 +59,27 @@ public class AuditLogs {
 	    job.setJarByClass(org.redoop.audits.AuditLogs.class);
 	    job.setMapperClass(org.redoop.audits.hbase.AuditLogsHBaseMapper.class);
 	    
-	    // Specify output types
-//	    job.setOutputFormatClass(TableOutputFormat.class);
-//	    job.getConfiguration().set(TableOutputFormat.OUTPUT_TABLE, TABLE);
-//	    job.setOutputKeyClass(ImmutableBytesWritable.class);
-//	    job.setOutputValueClass(Text.class);
-	       
+	    // Use a Map only Job (comment lines below for reduces confs)
+	    job.setOutputFormatClass(TableOutputFormat.class);
+	    job.getConfiguration().set(TableOutputFormat.OUTPUT_TABLE, TABLE);
+	    job.setOutputKeyClass(ImmutableBytesWritable.class);
+	    job.setOutputValueClass(Put.class);
+	    TableMapReduceUtil.addDependencyJars(job);
+		TableMapReduceUtil.addDependencyJars(job.getConfiguration());
+	    
+	    /* Use a Reducer Job (comment above lines for map only confs) 
 	    job.setMapOutputKeyClass(Text.class);
 	    job.setMapOutputValueClass(Text.class);
-	    TableMapReduceUtil.initTableReducerJob(TABLE,org.redoop.audits.hbase.AuditLogsHBaseReducer.class, job);
+    	TableMapReduceUtil.initTableReducerJob(TABLE,org.redoop.audits.hbase.AuditLogsHBaseReducer.class, job);
 	    job.setReducerClass(org.redoop.audits.hbase.AuditLogsHBaseReducer.class);
-    
-	    // FOR TESTING 
- 		// The right number of reduces seems to be 
- 		// 0.95 or 1.75 * (nodes * mapred.tasktracker.reduce.tasks.maximum)
- 		job.setNumReduceTasks(1); //THIS IS A MAP ONLY JOB
+	    */
+	    
+	    //  Testing performance and tuning 
+ 		//  The right number of reduces seems to be 
+ 		//  0.95 or 1.75 * (nodes * mapred.tasktracker.reduce.tasks.maximum)
+		//  0 ONLY MAP (write directly to HBase for example)
+		// >0 USE REDUCERS
+ 		job.setNumReduceTasks(0); 
  		
  		// SET INPUT PATHS
  		FileSystem fs = FileSystem.get(conf);
@@ -114,7 +118,7 @@ public class AuditLogs {
 		// 0.95 or 1.75 * (nodes * mapred.tasktracker.reduce.tasks.maximum)
 		job.setNumReduceTasks(10);
 		
-		// DELETE OUTPUT DIRECTORY FOR DEVELOPMENT
+		// DELETE OUTPUT DIRECTORY (FOR DEVELOPMENT)
 		FileSystem fs = FileSystem.get(conf);
 		if(sink.equalsIgnoreCase(HDFS)){
 			fs.delete(new Path(output), true);
