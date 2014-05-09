@@ -8,62 +8,133 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.HBaseConfiguration;
+import org.apache.hadoop.hbase.client.Put;
+import org.apache.hadoop.hbase.io.ImmutableBytesWritable;
+import org.apache.hadoop.hbase.mapreduce.TableMapReduceUtil;
+import org.apache.hadoop.hbase.mapreduce.TableOutputFormat;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.InvalidInputException;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class AuditLogs {
+	
+	private static Logger log = LoggerFactory.getLogger(AuditLogs.class);
+	
+	private static final String HDFS = "hdfs";
+	private static final String HBASE = "hbase";
+	
+	private static final String TABLE = "test";
 
 	public static void main(String[] args) throws Exception {
-		if (args.length != 2) {
-			System.err.println("Usage: AuditLogs <input path> <output path>");
+		if (args.length != 3) {
+			System.err.println("Usage: AuditLogs <sink type [hbase,hdfs]> <input path> <output path>");
 			System.exit(-1);
+			log.error("Usage: AuditLogs <sink type [hbase,hdfs]> <input path> <output path>");
 		}
 		
+		//SET JOB SINK TYPE
+		String sink = args[0];
+		
 		//SET JOB CONFIG AND CLASSES
-		Configuration conf = new Configuration();
-		Job job = Job.getInstance(conf, "Audit Logs Eclipse (Logins)");
-		job.setJarByClass(org.redoop.audits.AuditLogs.class);
-		job.setMapperClass(org.redoop.audits.AuditLogsMapper.class);
-		job.setReducerClass(org.redoop.audits.AuditLogsReducer.class);
-		
-		// FOR TESTING 
-		// The right number of reduces seems to be 
-		// 0.95 or 1.75 * (nodes * mapred.tasktracker.reduce.tasks.maximum)
-		job.setNumReduceTasks(10);
-
-		// Specify output types
-		job.setOutputKeyClass(Text.class);
-		job.setOutputValueClass(Text.class);
-
-		// DELETE OUTPUT DIRECTORY FOR DEVELOPMENT
-		FileSystem fs = FileSystem.get(conf);
-		fs.delete(new Path(args[1]), true);
-		
-		// SET INPUT PATHS
+		Job job;
+		switch (sink){
+			case (HDFS):
+				job = runHDFSJob(sink, args[1], args[2]);
+				System.exit(job.waitForCompletion(true) ? 0 : 1);
+			case (HBASE):
+				job = runHBASEJob(sink, args[1]);	
+				System.exit(job.waitForCompletion(true) ? 0 : 1);
+		}
+	}
+	
+	private static Job runHBASEJob(String sink, String input) throws Exception {
+		log.info("Configuring HBase Job");
+		Configuration conf =  HBaseConfiguration.create();
+		Job job = Job.getInstance(conf, "Audit Logs Eclipse (Logins) "+ sink);
+	    job.setJarByClass(org.redoop.audits.AuditLogs.class);
+	    job.setMapperClass(org.redoop.audits.hbase.AuditLogsHBaseMapper.class);
+	    
+	    // Specify output types
+//	    job.setOutputFormatClass(TableOutputFormat.class);
+//	    job.getConfiguration().set(TableOutputFormat.OUTPUT_TABLE, TABLE);
+//	    job.setOutputKeyClass(ImmutableBytesWritable.class);
+//	    job.setOutputValueClass(Text.class);
+	       
+	    job.setMapOutputKeyClass(Text.class);
+	    job.setMapOutputValueClass(Text.class);
+	    TableMapReduceUtil.initTableReducerJob(TABLE,org.redoop.audits.hbase.AuditLogsHBaseReducer.class, job);
+	    job.setReducerClass(org.redoop.audits.hbase.AuditLogsHBaseReducer.class);
+    
+	    // FOR TESTING 
+ 		// The right number of reduces seems to be 
+ 		// 0.95 or 1.75 * (nodes * mapred.tasktracker.reduce.tasks.maximum)
+ 		job.setNumReduceTasks(1); //THIS IS A MAP ONLY JOB
+ 		
+ 		// SET INPUT PATHS
+ 		FileSystem fs = FileSystem.get(conf);
 		List<IOException> rslt = new ArrayList<IOException>();
-		//String p = "/user/camus/data/audits/monthly/2014/*";
-		String p = args[0];
-		FileStatus[] inputs = fs.globStatus(new Path(p));
+		FileStatus[] inputs = fs.globStatus(new Path(input));
 		if(inputs.length > 0) {
 		      for (FileStatus onePath: inputs) {
 		    	  FileInputFormat.addInputPath(job, onePath.getPath());
 		      }
 		} else {
-		      rslt.add(new IOException("Input source " + p + " does not exist."));
+		      rslt.add(new IOException("Input source " + input + " does not exist."));
 		}
 		if (!rslt.isEmpty()) {
 		    throw new InvalidInputException(rslt);
 		}
+		return job;
+	}
 
+	public static Job runHDFSJob(String sink, String input, String output) throws Exception{
+		log.info("Configuring HDFS Job");
+		Configuration conf = new Configuration();
+		Job job = Job.getInstance(conf, "Audit Logs Eclipse (Logins) "+ sink);
+		job.setJarByClass(org.redoop.audits.AuditLogs.class);
+		job.setMapperClass(org.redoop.audits.hdfs.AuditLogsMapper.class);
+		job.setReducerClass(org.redoop.audits.hdfs.AuditLogsReducer.class);
+		
+		// Specify output types
+		job.setOutputKeyClass(Text.class);
+		job.setOutputValueClass(Text.class);
+		
 		// SET OUTPUT PATH
-		FileOutputFormat.setOutputPath(job, new Path(args[1]));
-
-		System.exit(job.waitForCompletion(true) ? 0 : 1);
-
+		FileOutputFormat.setOutputPath(job, new Path(output));
+		
+		// FOR TESTING 
+		// The right number of reduces seems to be 
+		// 0.95 or 1.75 * (nodes * mapred.tasktracker.reduce.tasks.maximum)
+		job.setNumReduceTasks(10);
+		
+		// DELETE OUTPUT DIRECTORY FOR DEVELOPMENT
+		FileSystem fs = FileSystem.get(conf);
+		if(sink.equalsIgnoreCase(HDFS)){
+			fs.delete(new Path(output), true);
+		}
+		
+		// SET INPUT PATHS
+		List<IOException> rslt = new ArrayList<IOException>();
+		FileStatus[] inputs = fs.globStatus(new Path(input));
+		if(inputs.length > 0) {
+		      for (FileStatus onePath: inputs) {
+		    	  FileInputFormat.addInputPath(job, onePath.getPath());
+		      }
+		} else {
+		      rslt.add(new IOException("Input source " + input + " does not exist."));
+		}
+		if (!rslt.isEmpty()) {
+		    throw new InvalidInputException(rslt);
+		}
+		return job;
+		
 	}
 
 }
