@@ -55,7 +55,7 @@ public class AuditLogs {
 	private static Job runHBASEJob(String sink, String input) throws Exception {
 		log.info("Configuring HBase Job");
 		Configuration conf =  HBaseConfiguration.create();
-		Job job = Job.getInstance(conf, "Audit Logs Eclipse (Logins) "+ sink);
+		Job job = Job.getInstance(conf, "Audit Logs Eclipse (Logins) "+ sink + "Table: "+TABLE);
 	    job.setJarByClass(org.redoop.audits.AuditLogs.class);
 	    job.setMapperClass(org.redoop.audits.hbase.AuditLogsHBaseMapper.class);
 	    
