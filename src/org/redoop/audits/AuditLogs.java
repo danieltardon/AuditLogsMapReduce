@@ -13,11 +13,14 @@ import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.io.ImmutableBytesWritable;
 import org.apache.hadoop.hbase.mapreduce.TableMapReduceUtil;
 import org.apache.hadoop.hbase.mapreduce.TableOutputFormat;
+import org.apache.hadoop.io.MapWritable;
+import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.InvalidInputException;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.elasticsearch.hadoop.mr.EsOutputFormat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,14 +30,15 @@ public class AuditLogs {
 	
 	private static final String HDFS = "hdfs";
 	private static final String HBASE = "hbase";
+	private static final String ELASTICSEARCH = "es";
 	
 	private static final String TABLE = "test";
 
 	public static void main(String[] args) throws Exception {
 		if (args.length != 3) {
-			System.err.println("Usage: AuditLogs <sink type [hbase,hdfs]> <input path> <output path>");
+			System.err.println("Usage: AuditLogs <sink type [hbase,hdfs,es]> <input path> <output path>");
 			System.exit(-1);
-			log.error("Usage: AuditLogs <sink type [hbase,hdfs]> <input path> <output path>");
+			log.error("Usage: AuditLogs <sink type [hbase,hdfs,es]> <input path> <output path>");
 		}
 		
 		//SET JOB SINK TYPE
@@ -49,6 +53,9 @@ public class AuditLogs {
 			case (HBASE):
 				job = runHBASEJob(sink, args[1]);	
 				System.exit(job.waitForCompletion(true) ? 0 : 1);
+			case (ELASTICSEARCH):
+				job = runElasticSearchJob(sink, args[1]);
+				System.exit(job.waitForCompletion(true) ? 0 : 1);
 		}
 	}
 	
@@ -59,7 +66,7 @@ public class AuditLogs {
 	    job.setJarByClass(org.redoop.audits.AuditLogs.class);
 	    job.setMapperClass(org.redoop.audits.hbase.AuditLogsHBaseMapper.class);
 	    
-	    // Use a Map only Job (comment lines below for reduces confs)
+	    // Use a Map only Job (comment lines below for reducers confs)
 	    job.setOutputFormatClass(TableOutputFormat.class);
 	    job.getConfiguration().set(TableOutputFormat.OUTPUT_TABLE, TABLE);
 	    job.setOutputKeyClass(ImmutableBytesWritable.class);
@@ -140,5 +147,48 @@ public class AuditLogs {
 		return job;
 		
 	}
+	
+	private static Job runElasticSearchJob(String sink, String input)throws Exception{
+		log.info("Configuring ElasticSearch Job");
+		
+		Configuration conf = new Configuration();
+		//conf.setBoolean("mapreduce.map.speculative", false);    
+		//conf.setBoolean("mapreduce.reduce.speculative", false);
+		conf.set("es.nodes", "openbus06");
+		conf.set("es.resource", "audits/user_login");
+		
+		Job job = Job.getInstance(conf, "Audit Logs Eclipse (Logins) ElasticSearch");
+		job.setJarByClass(org.redoop.audits.AuditLogs.class);
+	    job.setMapperClass(org.redoop.audits.elasticsearch.AuditLogsESMapper.class);
+	    job.setSpeculativeExecution(false);
+	    
+	    // Specify output types
+		job.setOutputFormatClass(EsOutputFormat.class);
+		job.setOutputKeyClass(NullWritable.class);
+		job.setMapOutputValueClass(MapWritable.class);
+		
+		//  Testing performance and tuning 
+ 		//  The right number of reduces seems to be 
+ 		//  0.95 or 1.75 * (nodes * mapred.tasktracker.reduce.tasks.maximum)
+		//  0 ONLY MAP (write directly to HBase for example)
+		// >0 USE REDUCERS
+ 		job.setNumReduceTasks(0);
+ 		
+ 		// SET INPUT PATHS
+ 		FileSystem fs = FileSystem.get(conf);
+		List<IOException> rslt = new ArrayList<IOException>();
+		FileStatus[] inputs = fs.globStatus(new Path(input));
+		if(inputs.length > 0) {
+		      for (FileStatus onePath: inputs) {
+		    	  FileInputFormat.addInputPath(job, onePath.getPath());
+		      }
+		} else {
+		      rslt.add(new IOException("Input source " + input + " does not exist."));
+		}
+		if (!rslt.isEmpty()) {
+		    throw new InvalidInputException(rslt);
+		}
 
+		return job;
+	}
 }
